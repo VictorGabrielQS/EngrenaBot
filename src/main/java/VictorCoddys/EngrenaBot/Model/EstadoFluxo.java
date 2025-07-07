@@ -3,10 +3,11 @@ package VictorCoddys.EngrenaBot.Model;
 
 public enum EstadoFluxo {
     INICIO,
+    AGUARDANDO_LOJA,
     AGUARDANDO_NOME,
     AGUARDANDO_SERVICO,
+    AGUARDANDO_OBSERVACAO,
     AGUARDANDO_DATA,
-    CONFIRMACAO
-
-
+    AGUARDANDO_HORARIO,
+    AGUARDANDO_CONFIRMACAO
 }

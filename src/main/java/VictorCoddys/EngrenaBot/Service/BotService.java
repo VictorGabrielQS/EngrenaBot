@@ -1,86 +1,370 @@
 package VictorCoddys.EngrenaBot.Service;
 
-
 import VictorCoddys.EngrenaBot.Model.Agendamento;
 import VictorCoddys.EngrenaBot.Model.EstadoFluxo;
 import VictorCoddys.EngrenaBot.Util.JsonStorage;
 import org.springframework.stereotype.Service;
 
-
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-// Serviço que gerencia o fluxo de mensagens do bot
-// Armazena o estado atual de cada usuário e os dados parciais do agendamento
+/**
+ * Serviço que gerencia o fluxo de mensagens do bot.
+ * Armazena o estado atual de cada usuário e os dados parciais do agendamento.
+ */
+
 
 @Service
 public class BotService {
 
-    // Mapas para armazenar o estado do fluxo e os dados parciais de cada usuário
+
+    // Mapa que armazena o estado atual da conversa por telefone
     private final Map<String, EstadoFluxo> estados = new HashMap<>();
+
+
+    // Mapa que armazena os dados preenchidos até agora por telefone
     private final Map<String, Agendamento> dadosParciais = new HashMap<>();
 
-    /**Processa a mensagem recebida do usuário e retorna a resposta apropriada.
-     * - @param telefone - número de telefone do usuário.
-     * - @param mensagem - mensagem enviada pelo usuário.
-     * - @return - A resposta do bot para o usuário.
+
+    // Mapa que armazena os dias disponíveis para agendamento por loja
+    private final Map<String, List<LocalDate>> diasDisponiveisMap = new HashMap<>();
+
+
+    /**
+     * Processa a mensagem recebida do usuário e retorna a resposta apropriada.
      *
+     * @param telefone número do telefone do usuário
+     * @param mensagem mensagem enviada pelo usuário
+     * @return resposta do bot
      */
 
-    public String processarMensagem(String telefone, String mensagem) {
 
-        // Verifica o estado atual do usuário e processa a mensagem de acordo
+    public String processarMensagem(String telefone, String mensagem) {
         EstadoFluxo estado = estados.getOrDefault(telefone, EstadoFluxo.INICIO);
 
         switch (estado) {
 
-
+            // Início do atendimento: perguntar qual loja
             case INICIO -> {
-                estados.put(telefone, EstadoFluxo.AGUARDANDO_NOME);
+
+                estados.put(telefone, EstadoFluxo.AGUARDANDO_LOJA);
                 dadosParciais.put(telefone, new Agendamento());
-                return "Olá! Qual o seu nome?";
+
+                return """
+                        Olá! Bem-vindo à Bike Rogers, a sua oficina de bicicletas! 🚴‍♂️
+                        Escolha a loja para atendimento:
+                        
+                        1️⃣ Loja Forte Ville
+                        2️⃣ Loja Novo Horizonte
+                        """;
             }
+
+
+            // Recebe o número da loja e armazena no agendamento
+            case AGUARDANDO_LOJA -> {
+                Agendamento agendamento = dadosParciais.get(telefone);
+
+                switch (mensagem.trim()) {
+                    case "1" -> agendamento.setLoja("Loja Forte Ville");
+                    case "2" -> agendamento.setLoja("Loja Novo Horizonte");
+                    default -> {
+                        return "❌ Opção inválida. Por favor, digite:\n1 para Loja Forte Ville\n2 para Loja Novo Horizonte";
+                    }
+                }
+
+                estados.put(telefone, EstadoFluxo.AGUARDANDO_NOME);
+                return "Perfeito! Agora, qual o seu nome?";
+            }
+
+
+            // Recebe o nome do usuário
             case AGUARDANDO_NOME -> {
-                Agendamento ag = dadosParciais.get(telefone);
-                ag.setNome(mensagem);
+                Agendamento agendamento = dadosParciais.get(telefone);
+                agendamento.setNome(mensagem);
+
                 estados.put(telefone, EstadoFluxo.AGUARDANDO_SERVICO);
-                return "Qual serviço você precisa? " +
-                        "(1) Revisão" +
-                        "(2) Troca de peças" +
-                        "(3) Compra"+
-                        "(4) Orçamento técnico" +
-                        "(5) Outros serviços";
+                return """
+                        Qual serviço você precisa?
+                        1️⃣ Revisão
+                        2️⃣ Troca de peças
+                        3️⃣ Compra
+                        4️⃣ Outros serviços
+                        """;
             }
 
 
+            // Recebe o tipo de serviço
             case AGUARDANDO_SERVICO -> {
-                Agendamento ag = dadosParciais.get(telefone);
-                ag.setTipoServico(mensagem);
+                Agendamento agendamento = dadosParciais.get(telefone);
+                String servico = mensagem.trim();
+                switch (servico) {
+                    case "1" -> {
+                        agendamento.setTipoServico("Revisão");
+                        estados.put(telefone, EstadoFluxo.AGUARDANDO_DATA);
+                        List<LocalDate> diasDisponiveis = obterDiasDisponiveis(7);
+                        diasDisponiveisMap.put(telefone, diasDisponiveis);
+                        StringBuilder sb = new StringBuilder("Digite o número do dia que melhor te atende:\n\n");
+                        for (int i = 0; i < diasDisponiveis.size(); i++) {
+                            sb.append(i + 1).append(" - ")
+                                    .append(diasDisponiveis.get(i).format(DateTimeFormatter.ofPattern("dd/MM"))).append("\n");
+                        }
+                        return sb.toString();
+                    }
+                    case "2" -> {
+                        agendamento.setTipoServico("Troca de peças");
+                        estados.put(telefone, EstadoFluxo.AGUARDANDO_OBSERVACAO);
+                        return "Por favor, descreva quais peças você deseja trocar.";
+                    }
+                    case "3" -> {
+                        agendamento.setTipoServico("Compra");
+
+                        // ✅ Exibe o catálogo básico
+                        String mensagemCatalogo = """
+                                🛒 Confira os itens mais vendidos:
+                                
+                                1️⃣ Kit de lubrificação – R$ 49,90
+                                2️⃣ Selim ergonômico – R$ 120,00
+                                3️⃣ Farol com LED – R$ 80,00
+                                
+                                Para realizar uma compra, fale com nosso setor de vendas
+                                clique no numero abaixo ou envie uma mensagem para:
+                                
+                                📞 (62) 98186-6691
+                                
+                                """;
+
+                        // ✅ Simula envio automático para o setor de vendas
+                        enviarParaSetorDeVendas(agendamento); // <-- você implementa isso
+
+                        return mensagemCatalogo;
+                    }
+
+                    case "4" -> {
+                        agendamento.setTipoServico("Outros serviços");
+                        estados.put(telefone, EstadoFluxo.AGUARDANDO_OBSERVACAO);
+                        return "Por favor, descreva qual serviço você deseja realizar.";
+                    }
+                    default -> {
+                        return "❌ Opção inválida. Escolha:\n1 - Revisião\n2 - Troca de peças\n3 - Compra\n4 - Outros serviços";
+                    }
+                }
+            }
+
+
+            // Recebe a observação do usuário (caso tenha escolhido troca de peças ou outros serviços)
+            case AGUARDANDO_OBSERVACAO -> {
+                Agendamento agendamento = dadosParciais.get(telefone);
+                agendamento.setObservacao(mensagem);
                 estados.put(telefone, EstadoFluxo.AGUARDANDO_DATA);
-                return "Para qual dia e horário?";
+                List<LocalDate> diasDisponiveis = obterDiasDisponiveis(7);
+                diasDisponiveisMap.put(telefone, diasDisponiveis);
+                StringBuilder sb = new StringBuilder("Digite o número do dia que melhor te atende:\n\n");
+                for (int i = 0; i < diasDisponiveis.size(); i++) {
+                    sb.append(i + 1).append(" - ")
+                            .append(diasDisponiveis.get(i).format(DateTimeFormatter.ofPattern("dd/MM"))).append("\n");
+                }
+                return sb.toString();
             }
 
 
+            // Recebe a data desejada e valida o formato
             case AGUARDANDO_DATA -> {
-                Agendamento ag = dadosParciais.get(telefone);
-                ag.setDataHora(mensagem);
-                ag.setTelefone(telefone);
-                JsonStorage.salvarAgendamento(ag);
-                estados.remove(telefone);
-                dadosParciais.remove(telefone);
-                return String.format("""
-                📅 Novo Agendamento
-                👤 Nome: %s
-                🔧 Serviço: %s
-                🕐 Data: %s
-                Agendamento confirmado!""",
-                        ag.getNome(), ag.getTipoServico(), ag.getDataHora());
+                try {
+                    int opcao = Integer.parseInt(mensagem.trim()) - 1;
+                    List<LocalDate> dias = diasDisponiveisMap.get(telefone);
+                    if (opcao < 0 || opcao >= dias.size()) {
+                        return "❌ Opção inválida. Escolha um número da lista de dias disponíveis.";
+                    }
+                    LocalDate escolhido = dias.get(opcao);
+                    Agendamento agendamento = dadosParciais.get(telefone);
+                    agendamento.setData(escolhido.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                    estados.put(telefone, EstadoFluxo.AGUARDANDO_HORARIO);
+                    return "Agora informe o horário desejado. Ex: 14:00";
+                } catch (NumberFormatException e) {
+                    return "❌ Por favor, digite apenas o número correspondente ao dia.";
+                }
             }
+
+
+            // Recebe o horário desejado e finaliza o agendamento
+            case AGUARDANDO_HORARIO -> {
+                Agendamento agendamento = dadosParciais.get(telefone);
+                try {
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+                    LocalTime.parse(mensagem, formatter);
+                    agendamento.setHorario(mensagem);
+
+                    estados.put(telefone, EstadoFluxo.AGUARDANDO_CONFIRMACAO);
+
+                    return String.format("""
+                                    📝 Confirme os dados abaixo:
+                                    
+                                    📍 Loja: %s
+                                    👤 Nome: %s
+                                    🔧 Serviço: %s
+                                    📋 Observação: %s
+                                    📆 Data: %s às %s
+                                    
+                                    Responda:
+                               
+                                    ✅ Confirmar
+                                    ❌ Cancelar
+                                    
+                                    """,
+                            agendamento.getLoja(), agendamento.getNome(), agendamento.getTipoServico(),
+                            agendamento.getObservacao() != null ? agendamento.getObservacao() : "Não informado",
+                            agendamento.getData(), agendamento.getHorario());
+                } catch (Exception e) {
+                    return "❌ Horário inválido! (ex: 14:00)";
+                }
+            }
+
+
+            // Confirmação do agendamento
+            case AGUARDANDO_CONFIRMACAO -> {
+                String resposta = mensagem.trim().toLowerCase();
+                Agendamento agendamento = dadosParciais.get(telefone);
+
+                if (resposta.equals("✅") || resposta.equalsIgnoreCase("confirmar")) {
+                    agendamento.setTelefone(telefone);
+                    JsonStorage.salvarAgendamento(agendamento);
+                    estados.remove(telefone);
+                    dadosParciais.remove(telefone);
+                    notificarMecanico(agendamento);
+                    return "✅ Agendamento confirmado com sucesso! Obrigado por escolher a Bike Rogers 🚴‍♂️\n"+
+                            "Te esperamos na loja " + agendamento.getLoja() + " no dia " + agendamento.getData() + " às " + agendamento.getHorario() + ".\n"+
+                            "Se precisar de mais alguma coisa, é só chamar! 😊"
+                            ;
+
+                } else if (resposta.equals("❌") || resposta.equalsIgnoreCase("cancelar")) {
+                    estados.put(telefone, EstadoFluxo.INICIO);
+                    dadosParciais.remove(telefone);
+
+                    // Limpa os dados parciais do usuário
+                    return "❌ Agendamento cancelado. Vamos começar novamente.";
+                } else {
+                    return "Por favor, responda com ✅ para confirmar ou ❌ para cancelar.";
+                }
+            }
+
+
+            // Estado padrão para reiniciar o fluxo em caso de erro
             default -> {
                 estados.put(telefone, EstadoFluxo.INICIO);
-                return "Vamos começar! Qual o seu nome?";
+                return "Algo deu errado! Vamos começar novamente. Qual loja deseja atender?";
             }
         }
     }
-}
 
+
+    /**
+     * Obtém uma lista de dias disponíveis para agendamento, considerando o limite de 5 agendamentos por dia.
+     *
+     * @param quantidade número de dias a serem retornados
+     * @return lista de LocalDate com os dias disponíveis
+     */
+
+    private List<LocalDate> obterDiasDisponiveis(int quantidade) {
+        List<LocalDate> dias = new ArrayList<>();
+        LocalDate hoje = LocalDate.now();
+
+        while (dias.size() < quantidade) {
+            DayOfWeek diaSemana = hoje.getDayOfWeek();
+
+            // Segunda a sábado
+            boolean horarioPermitido = diaSemana != DayOfWeek.SUNDAY;
+            boolean sabado = diaSemana == DayOfWeek.SATURDAY;
+
+            if (horarioPermitido && !excedeuLimitePorDia(hoje)) {
+                dias.add(hoje);
+            }
+
+            hoje = hoje.plusDays(1);
+        }
+
+        return dias;
+    }
+
+
+    /**
+     * Verifica se o limite de 5 agendamentos por dia foi excedido.
+     *
+     * @param data data a ser verificada
+     * @return true se o limite foi excedido, false caso contrário
+     */
+
+    private boolean excedeuLimitePorDia(LocalDate data) {
+        List<Agendamento> ags = JsonStorage.listarAgendamentos();
+        long total = ags.stream()
+                .filter(a -> a.getData().equals(data.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))))
+                .count();
+        return total >= 5;
+    }
+
+
+    /**
+     * Envia os dados do agendamento para o setor de vendas.
+     * Futuramente, pode ser integrado com a Z-API para envio automático.
+     *
+     * @param agendamento objeto Agendamento com os dados do cliente
+     */
+    private void enviarParaSetorDeVendas(Agendamento agendamento) {
+        // Aqui você pode usar a Z-API futuramente para enviar os dados automaticamente
+
+        String mensagem = String.format("""
+                📦 Novo cliente interessado em compra!
+                
+                👤 Nome: %s
+                📱 Telefone: %s
+                Loja: %s
+                Serviço: %s
+                
+                ⚠️ Favor entrar em contato para finalizar a compra.
+                """, agendamento.getNome(), agendamento.getTelefone(), agendamento.getLoja(), agendamento.getTipoServico());
+
+        // Exemplo: usar Z-API futuramente para envio automático:
+        // zApiClient.enviarMensagem(numeroVendas, mensagem);
+
+        System.out.println("📤 Mensagem enviada ao setor de vendas:\n" + mensagem); // log no console
+    }
+
+
+
+    /**
+     * Notifica o mecânico sobre um novo agendamento.
+     * Futuramente, pode ser integrado com a Z-API para envio automático.
+     *
+     * @param agendamento objeto Agendamento com os dados do cliente
+     */
+    private void notificarMecanico(Agendamento agendamento) {
+        String mensagem = String.format("""
+            📅 Novo Agendamento
+            👤 Nome: %s
+            🔧 Serviço: %s
+            📆 Data: %s às %s
+            📋 Observação: %s
+            🏪 Loja: %s
+            📱 Telefone: %s
+            """,
+                agendamento.getNome(),
+                agendamento.getTipoServico(),
+                agendamento.getData(),
+                agendamento.getHorario(),
+                agendamento.getObservacao() != null ? agendamento.getObservacao() : "Nenhuma",
+                agendamento.getLoja(),
+                agendamento.getTelefone()
+        );
+
+        System.out.println("📤 Mensagem enviada ao mecânico:\n" + mensagem);
+
+        // Futuro: enviar via Z-API
+    }
+
+
+}
