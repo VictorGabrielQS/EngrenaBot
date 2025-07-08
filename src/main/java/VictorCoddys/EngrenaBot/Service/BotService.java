@@ -1,18 +1,25 @@
 package VictorCoddys.EngrenaBot.Service;
 
+import VictorCoddys.EngrenaBot.Config.CatalogoProperties;
+import VictorCoddys.EngrenaBot.Config.TelProperties;
+import VictorCoddys.EngrenaBot.Config.ZApiProperties;
 import VictorCoddys.EngrenaBot.Model.Agendamento;
 import VictorCoddys.EngrenaBot.Model.EstadoFluxo;
 import VictorCoddys.EngrenaBot.Util.JsonStorage;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Serviço que gerencia o fluxo de mensagens do bot.
@@ -21,7 +28,14 @@ import java.util.Map;
 
 
 @Service
+@RequiredArgsConstructor
 public class BotService {
+
+
+    // Propriedades de configuração
+    private final ZApiProperties zApi;
+    private final CatalogoProperties catalogo;
+    private final TelProperties tel;
 
 
     // Mapa que armazena o estado atual da conversa por telefone
@@ -43,8 +57,6 @@ public class BotService {
      * @param mensagem mensagem enviada pelo usuário
      * @return resposta do bot
      */
-
-
     public String processarMensagem(String telefone, String mensagem) {
         EstadoFluxo estado = estados.getOrDefault(telefone, EstadoFluxo.INICIO);
 
@@ -124,26 +136,25 @@ public class BotService {
                     case "3" -> {
                         agendamento.setTipoServico("Compra");
 
-                        // ✅ Exibe o catálogo básico
-                        String mensagemCatalogo = """
-                                🛒 Confira os itens mais vendidos:
-                                
-                                1️⃣ Kit de lubrificação – R$ 49,90
-                                2️⃣ Selim ergonômico – R$ 120,00
-                                3️⃣ Farol com LED – R$ 80,00
-                                
-                                Para realizar uma compra, fale com nosso setor de vendas
-                                clique no numero abaixo ou envie uma mensagem para:
-                                
-                                📞 (62) 98186-6691
-                                
-                                """;
+                        agendamento.setTelefone(telefone);
 
-                        // ✅ Simula envio automático para o setor de vendas
-                        enviarParaSetorDeVendas(agendamento); // <-- você implementa isso
+                        enviarParaSetorDeVendas(agendamento);
 
-                        return mensagemCatalogo;
+                        enviarArquivoPdfParaCliente(
+                                telefone,
+                                catalogo.getCaminhoPdf(),
+                                """
+                                        🛒 Confira nosso catálogo completo de produtos!
+                                        """
+                        );
+
+                        return """
+                                Enviamos o catálogo completo para você! 📄
+                                
+                                📞 Fale com o setor de vendas, Clicando no número abaixo: %s
+                                """.formatted(tel.getTelefoneVendas());
                     }
+
 
                     case "4" -> {
                         agendamento.setTipoServico("Outros serviços");
@@ -151,7 +162,7 @@ public class BotService {
                         return "Por favor, descreva qual serviço você deseja realizar.";
                     }
                     default -> {
-                        return "❌ Opção inválida. Escolha:\n1 - Revisião\n2 - Troca de peças\n3 - Compra\n4 - Outros serviços";
+                        return "❌ Opção inválida. Escolha:\n1 - Revisão\n2 - Troca de peças\n3 - Compra\n4 - Outros serviços";
                     }
                 }
             }
@@ -224,20 +235,20 @@ public class BotService {
                     estados.put(telefone, EstadoFluxo.AGUARDANDO_CONFIRMACAO);
 
                     return String.format("""
-                        📝 Confirme os dados abaixo:
-
-                        📍 Loja: %s
-                        👤 Nome: %s
-                        🔧 Serviço: %s
-                        📋 Observação: %s
-                        📆 Data: %s às %s
-
-                        Responda:
-
-                        ✅ Confirmar
-                        ❌ Cancelar
-
-                        """,
+                                    📝 Confirme os dados abaixo:
+                                    
+                                    📍 Loja: %s
+                                    👤 Nome: %s
+                                    🔧 Serviço: %s
+                                    📋 Observação: %s
+                                    📆 Data: %s às %s
+                                    
+                                    Responda:
+                                    
+                                    ✅ Confirmar
+                                    ❌ Cancelar
+                                    
+                                    """,
                             agendamento.getLoja(), agendamento.getNome(), agendamento.getTipoServico(),
                             agendamento.getObservacao() != null ? agendamento.getObservacao() : "Não informado",
                             agendamento.getData(), agendamento.getHorario());
@@ -246,7 +257,6 @@ public class BotService {
                     return "❌ Horário inválido! (ex: 14:00)";
                 }
             }
-
 
 
             // Confirmação do agendamento
@@ -260,8 +270,8 @@ public class BotService {
                     estados.remove(telefone);
                     dadosParciais.remove(telefone);
                     notificarMecanico(agendamento);
-                    return "✅ Agendamento confirmado com sucesso! Obrigado por escolher a Bike Rogers 🚴‍♂️\n"+
-                            "Te esperamos na loja " + agendamento.getLoja() + " no dia " + agendamento.getData() + " às " + agendamento.getHorario() + ".\n"+
+                    return "✅ Agendamento confirmado com sucesso! Obrigado por escolher a Bike Rogers 🚴‍♂️\n" +
+                            "Te esperamos na loja " + agendamento.getLoja() + " no dia " + agendamento.getData() + " às " + agendamento.getHorario() + ".\n" +
                             "Se precisar de mais alguma coisa, é só chamar! 😊"
                             ;
 
@@ -292,7 +302,6 @@ public class BotService {
      * @param quantidade número de dias a serem retornados
      * @return lista de LocalDate com os dias disponíveis
      */
-
     private List<LocalDate> obterDiasDisponiveis(int quantidade) {
         List<LocalDate> dias = new ArrayList<>();
         LocalDate hoje = LocalDate.now();
@@ -327,7 +336,6 @@ public class BotService {
      * @param data data a ser verificada
      * @return true se o limite foi excedido, false caso contrário
      */
-
     private boolean excedeuLimitePorDia(LocalDate data) {
         List<Agendamento> ags = JsonStorage.listarAgendamentos();
         long total = ags.stream()
@@ -364,6 +372,41 @@ public class BotService {
     }
 
 
+    /**
+     * Envia um arquivo PDF para o cliente via Z-API.
+     *
+     * @param telefone   número do telefone do cliente
+     * @param caminhoPdf caminho do arquivo PDF a ser enviado
+     * @param legenda    legenda que acompanha o arquivo
+     */
+    public void enviarArquivoPdfParaCliente(String telefone, String caminhoPdf, String legenda) {
+        String url = "https://zapi.z-api.io/instances/" + zApi.getInstanceId() + "/token/" + zApi.getToken() + "/send-file";
+
+        try {
+            byte[] fileContent = Files.readAllBytes(Paths.get(caminhoPdf));
+            String base64 = Base64.getEncoder().encodeToString(fileContent);
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("""
+                            {
+                                "phone": "%s",
+                                "filename": "catalogo.pdf",
+                                "base64": "%s",
+                                "caption": "%s"
+                            }
+                            """.formatted(telefone, base64, legenda)))
+                    .build();
+
+            client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
     /**
      * Notifica o mecânico sobre um novo agendamento.
@@ -373,14 +416,14 @@ public class BotService {
      */
     private void notificarMecanico(Agendamento agendamento) {
         String mensagem = String.format("""
-            📅 Novo Agendamento
-            👤 Nome: %s
-            🔧 Serviço: %s
-            📆 Data: %s às %s
-            📋 Observação: %s
-            🏪 Loja: %s
-            📱 Telefone: %s
-            """,
+                        📅 Novo Agendamento
+                        👤 Nome: %s
+                        🔧 Serviço: %s
+                        📆 Data: %s às %s
+                        📋 Observação: %s
+                        🏪 Loja: %s
+                        📱 Telefone: %s
+                        """,
                 agendamento.getNome(),
                 agendamento.getTipoServico(),
                 agendamento.getData(),
