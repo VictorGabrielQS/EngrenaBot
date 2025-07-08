@@ -24,9 +24,21 @@ public class BotController {
     }
 
 
+    // Receber mensagem do WhatsApp
+    // 📩 Isso processa mensagens recebidas do WhatsApp e executa ações baseadas nelas.
     @PostMapping
     public String receberMensagem(@RequestParam String telefone, @RequestParam String texto) {
         return botService.processarMensagem(telefone, texto);
+    }
+
+
+
+    // Limpa todos os agendamentos
+    // 🗑️ Isso remove todos os agendamentos salvos no JSON local.
+    @DeleteMapping("/reset")
+    public String resetarAgendamentos() {
+        JsonStorage.limparAgendamentos();
+        return "✅ Todos os agendamentos foram apagados.";
     }
 
 

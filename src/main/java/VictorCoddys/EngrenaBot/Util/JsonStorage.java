@@ -15,20 +15,48 @@ public class JsonStorage {
 
 
 
+    /** Obtém o caminho do arquivo JSON específico para a loja.
+     *
+     * / @param loja O nome da loja para determinar o arquivo.
+     * / @return O caminho do arquivo JSON correspondente à loja.
+     */
+    private static String getPathArquivoPorLoja(String loja) {
+        String nomeArquivo = switch (loja.toLowerCase()) {
+            case "loja forte ville" -> "loja_forte_ville.json";
+            case "loja novo horizonte" -> "loja_novo_horizonte.json";
+            default -> "outros.json";
+        };
+        return "agendamentos/" + nomeArquivo;
+    }
+
+
+
+
     /** Salva um agendamento no arquivo JSON.
      *
      * / @param agendamento O objeto Agendamento a ser salvo.
      */
     public static void salvarAgendamento(Agendamento agendamento) {
         try {
+            String path = getPathArquivoPorLoja(agendamento.getLoja());
+            File file = new File(path);
             ObjectMapper mapper = new ObjectMapper();
-            List<Agendamento> agendamentos = listarAgendamentos();
+            List<Agendamento> agendamentos = new ArrayList<>();
+
+            if (file.exists() && file.length() > 0) {
+                agendamentos = mapper.readValue(file, new TypeReference<>() {});
+            } else {
+                file.getParentFile().mkdirs(); // Garante que a pasta existe
+                file.createNewFile();
+            }
+
             agendamentos.add(agendamento);
-            mapper.writeValue(new File(FILE_PATH), agendamentos);
+            mapper.writeValue(file, agendamentos);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
 
 
 
@@ -37,15 +65,45 @@ public class JsonStorage {
      * /@return Uma lista de objetos Agendamento.
      */
     public static List<Agendamento> listarAgendamentos() {
+        List<Agendamento> todos = new ArrayList<>();
+        File pasta = new File("agendamentos");
+
+        if (pasta.exists()) {
+            File[] arquivos = pasta.listFiles((dir, name) -> name.endsWith(".json"));
+            ObjectMapper mapper = new ObjectMapper();
+
+            if (arquivos != null) {
+                for (File file : arquivos) {
+                    try {
+                        List<Agendamento> ags = mapper.readValue(file, new TypeReference<>() {});
+                        todos.addAll(ags);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        return todos;
+    }
+
+
+
+
+    /** Limpa todos os agendamentos armazenados no arquivo JSON.
+     *
+     * / Isso remove todos os agendamentos, deixando o arquivo vazio.
+     */
+    public static void limparAgendamentos() {
         try {
             ObjectMapper mapper = new ObjectMapper();
-            File file = new File(FILE_PATH);
-            if (!file.exists()) return new ArrayList<>();
-            return mapper.readValue(file, new TypeReference<>() {});
+            mapper.writeValue(new File("agendamentos.json"), new ArrayList<>()); // limpa
         } catch (Exception e) {
-            return new ArrayList<>();
+            e.printStackTrace();
         }
     }
+
+
 }
 
 

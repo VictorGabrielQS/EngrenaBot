@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulador de Conversa - Bike Rogers</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        textarea { width: 100%; height: 100px; margin-top: 10px; }
+        .msg { margin: 5px 0; }
+        .user { color: blue; }
+        .bot { color: green; }
+    </style>
+</head>
+<body>
+
+<h2>Simular conversa com o Bot</h2>
+
+<form id="form">
+    <label for="telefone">Telefone:</label><br>
+    <input type="text" id="telefone" value="62999999999"><br><br>
+    <label for="mensagem">Mensagem:</label><br>
+    <input type="text" id="mensagem"><br><br>
+    <button type="submit">Enviar</button>
+</form>
+
+<div id="conversa"></div>
+
+<script>
+    const form = document.getElementById("form");
+    const conversa = document.getElementById("conversa");
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const telefone = document.getElementById("telefone").value;
+        const mensagem = document.getElementById("mensagem").value;
+
+        conversa.innerHTML += `<div class="msg user"><b>Você:</b> ${mensagem}</div>`;
+
+        const response = await fetch(`/mensagem?telefone=${telefone}&texto=${mensagem}`, {
+            method: 'POST'
+        });
+        const resposta = await response.text();
+
+        conversa.innerHTML += `<div class="msg bot"><b>Bot:</b> ${resposta.replaceAll('\\n', '<br>')}</div>`;
+        document.getElementById("mensagem").value = "";
+        window.scrollTo(0, document.body.scrollHeight);
+    };
+</script>
+
+</body>
+</html>

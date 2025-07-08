@@ -196,34 +196,57 @@ public class BotService {
             case AGUARDANDO_HORARIO -> {
                 Agendamento agendamento = dadosParciais.get(telefone);
                 try {
-                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
-                    LocalTime.parse(mensagem, formatter);
-                    agendamento.setHorario(mensagem);
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("H:mm");
+                    LocalTime horarioEscolhido = LocalTime.parse(mensagem, formatter);
 
+                    // Recupera o dia agendado
+                    LocalDate dataEscolhida = LocalDate.parse(agendamento.getData(), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                    DayOfWeek diaSemana = dataEscolhida.getDayOfWeek();
+
+                    LocalTime inicio;
+                    LocalTime fim;
+
+                    if (diaSemana == DayOfWeek.SATURDAY) {
+                        inicio = LocalTime.of(8, 0);
+                        fim = LocalTime.of(15, 0);
+                    } else {
+                        inicio = LocalTime.of(8, 0);
+                        fim = LocalTime.of(18, 0);
+                    }
+
+                    // Verifica se está dentro do horário de funcionamento
+                    if (horarioEscolhido.isBefore(inicio) || horarioEscolhido.isAfter(fim)) {
+                        return String.format("❌ Horário fora do funcionamento da loja. Horário permitido: %s às %s",
+                                inicio.toString(), fim.toString());
+                    }
+
+                    agendamento.setHorario(mensagem);
                     estados.put(telefone, EstadoFluxo.AGUARDANDO_CONFIRMACAO);
 
                     return String.format("""
-                                    📝 Confirme os dados abaixo:
-                                    
-                                    📍 Loja: %s
-                                    👤 Nome: %s
-                                    🔧 Serviço: %s
-                                    📋 Observação: %s
-                                    📆 Data: %s às %s
-                                    
-                                    Responda:
-                               
-                                    ✅ Confirmar
-                                    ❌ Cancelar
-                                    
-                                    """,
+                        📝 Confirme os dados abaixo:
+
+                        📍 Loja: %s
+                        👤 Nome: %s
+                        🔧 Serviço: %s
+                        📋 Observação: %s
+                        📆 Data: %s às %s
+
+                        Responda:
+
+                        ✅ Confirmar
+                        ❌ Cancelar
+
+                        """,
                             agendamento.getLoja(), agendamento.getNome(), agendamento.getTipoServico(),
                             agendamento.getObservacao() != null ? agendamento.getObservacao() : "Não informado",
                             agendamento.getData(), agendamento.getHorario());
+
                 } catch (Exception e) {
                     return "❌ Horário inválido! (ex: 14:00)";
                 }
             }
+
 
 
             // Confirmação do agendamento
@@ -277,17 +300,23 @@ public class BotService {
         while (dias.size() < quantidade) {
             DayOfWeek diaSemana = hoje.getDayOfWeek();
 
-            // Segunda a sábado
-            boolean horarioPermitido = diaSemana != DayOfWeek.SUNDAY;
+            boolean domingo = diaSemana == DayOfWeek.SUNDAY;
             boolean sabado = diaSemana == DayOfWeek.SATURDAY;
 
-            if (horarioPermitido && !excedeuLimitePorDia(hoje)) {
-                dias.add(hoje);
+            if (!domingo) {
+                // Se for hoje, verificar horário atual (exemplo: aceitar agendamento só se agora for antes de 17:00)
+                if (hoje.isEqual(LocalDate.now())) {
+                    LocalTime agora = LocalTime.now();
+                    LocalTime horarioFechamento = sabado ? LocalTime.of(15, 0) : LocalTime.of(18, 0);
+                    if (agora.isBefore(horarioFechamento.minusHours(1))) {
+                        dias.add(hoje);
+                    }
+                } else {
+                    dias.add(hoje);
+                }
             }
-
             hoje = hoje.plusDays(1);
         }
-
         return dias;
     }
 
