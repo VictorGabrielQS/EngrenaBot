@@ -69,12 +69,18 @@ public class BotService {
                 dadosParciais.put(telefone, new Agendamento());
 
                 return """
-                        Olá! Bem-vindo à Bike Rogers, a sua oficina de bicicletas! 🚴‍♂️
-                        Escolha a loja para atendimento:
+                        👋 Olá! Seja muito bem-vindo à *Bike Rogers*, a sua parceira número 1 em cuidados com bicicletas! 🚴‍♀️🔧
                         
-                        1️⃣ Loja Forte Ville
-                        2️⃣ Loja Novo Horizonte
+                        Vamos começar o seu atendimento?
+                        
+                        Escolha a loja mais próxima de você:
+                        
+                        1️⃣ *Loja Forte Ville*
+                        2️⃣ *Loja Novo Horizonte*
+                        
+                        Responda com o número da loja desejada. 👇
                         """;
+
             }
 
 
@@ -102,12 +108,16 @@ public class BotService {
 
                 estados.put(telefone, EstadoFluxo.AGUARDANDO_SERVICO);
                 return """
-                        Qual serviço você precisa?
-                        1️⃣ Revisão
-                        2️⃣ Troca de peças
-                        3️⃣ Compra
-                        4️⃣ Outros serviços
+                        🚲 Qual serviço você deseja agendar hoje?
+                        
+                        1️⃣ *Revisão completa* — Deixe sua bike como nova!
+                        2️⃣ *Troca de peças* — Pneus, câmbios, freios e mais!
+                        3️⃣ *Compra de produtos* — Acesse nosso catálogo!
+                        4️⃣ *Outros serviços* — Personalizados para você!
+                        
+                        Digite o número da opção desejada. 👇
                         """;
+
             }
 
 
@@ -270,10 +280,15 @@ public class BotService {
                     estados.remove(telefone);
                     dadosParciais.remove(telefone);
                     notificarMecanico(agendamento);
-                    return "✅ Agendamento confirmado com sucesso! Obrigado por escolher a Bike Rogers 🚴‍♂️\n" +
-                            "Te esperamos na loja " + agendamento.getLoja() + " no dia " + agendamento.getData() + " às " + agendamento.getHorario() + ".\n" +
-                            "Se precisar de mais alguma coisa, é só chamar! 😊"
-                            ;
+                    return "✅ Agendamento confirmado com sucesso, *" + agendamento.getNome() + "*! 🎉\n\n" +
+                            "📍 Loja: *" + agendamento.getLoja() + "*\n" +
+                            "📅 Data: *" + agendamento.getData() + "* às *" + agendamento.getHorario() + "*\n" +
+                            "🔧 Serviço: *" + agendamento.getTipoServico() + "*\n\n" +
+                            gerarMensagemPromocional()+
+                            "Nos vemos em breve! Obrigado por confiar na Bike Rogers! 🚴‍♂️✨";
+
+
+
 
                 } else if (resposta.equals("❌") || resposta.equalsIgnoreCase("cancelar")) {
                     estados.put(telefone, EstadoFluxo.INICIO);
@@ -437,6 +452,46 @@ public class BotService {
 
         // Futuro: enviar via Z-API
     }
+
+
+
+    /**
+     * Gera uma mensagem promocional aleatória para o cliente.
+     * Pode ser usada em qualquer ponto do fluxo, como após a confirmação do agendamento.
+     *
+     * - @return mensagem promocional
+     */
+    private String gerarMensagemPromocional() {
+        List<String> frases = List.of(
+                "🎁 Dica: clientes que fazem 3 revisões ganham um brinde surpresa!",
+                "💡 Lembre-se: manter a bike revisada aumenta a vida útil em até 40%!",
+                "⚡ Promoção do mês: ganhe 10% OFF na próxima troca de pneus!",
+                "🔧 Faça sua revisão completa e ganhe lubrificação grátis no mesmo dia!",
+                "🚲 A cada 5 agendamentos, você ganha uma lavagem especial grátis!",
+                "🎯 Dica: agendar revisões regulares reduz em até 60% os gastos com manutenção!",
+                "🌦️ Vai pedalar na chuva? Verifique os freios! Agende uma checagem com a gente!",
+                "📅 Clientes fiéis recebem prioridade na agenda em períodos de alta demanda!",
+                "💬 Quer receber promoções no WhatsApp? Avise a gente e fique por dentro!",
+                "🔥 Essa semana: descontos especiais para serviços de freio e transmissão!",
+                "🎉 Indique um amigo e ganhe R$10 de crédito para usar em qualquer serviço!",
+                "🛑 Notou ruído estranho na bike? Traga pra gente! Avaliação é por nossa conta!",
+                "🚴 Mulher que pedala também tem vez! Ganhe um mimo especial na sua revisão 💜",
+                "🧼 Bike suja? A gente lava pra você com preço especial pra clientes da semana!",
+                "🎨 Deixe sua bike com cara nova: temos pintura personalizada sob consulta!",
+                "🛞 Pneus calibrados fazem toda a diferença! Agende uma inspeção expressa grátis!",
+                "🏁 Vai competir? Traga sua bike pra uma revisão técnica antes da prova!",
+                "👨‍👩‍👧 Pedal em família? Temos kits promocionais para revisão de 2 ou mais bikes!",
+                "📊 Você sabia? Clientes que revisam a cada 2 meses têm 80% menos problemas!",
+                "📸 Poste sua bike no Instagram com #BikeRogers e concorra a brindes mensais!",
+                "🆕 Chegaram novos acessórios! Consulte nosso catálogo e aproveite os preços!",
+                "🛠️ Instalação gratuita de acessórios comprados na loja (por tempo limitado!)",
+                "👂 Escutou barulho estranho no pedal? Traga pra gente verificar sem custo!",
+                "🔁 Troque sua relação completa com 15% OFF esse mês!"
+        );
+        Collections.shuffle(frases);
+        return frases.get(0);
+    }
+
 
 
 }
