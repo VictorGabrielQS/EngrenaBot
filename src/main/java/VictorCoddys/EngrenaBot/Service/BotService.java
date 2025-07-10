@@ -1,6 +1,7 @@
 package VictorCoddys.EngrenaBot.Service;
 
 import VictorCoddys.EngrenaBot.Config.CatalogoProperties;
+import VictorCoddys.EngrenaBot.Config.LojaProperties;
 import VictorCoddys.EngrenaBot.Config.TelProperties;
 import VictorCoddys.EngrenaBot.Config.ZApiProperties;
 import VictorCoddys.EngrenaBot.Model.Agendamento;
@@ -36,6 +37,8 @@ public class BotService {
     private final ZApiProperties zApi;
     private final CatalogoProperties catalogo;
     private final TelProperties tel;
+    private final LojaProperties lojaProps;
+    private final ZApiClient zApiClient;
 
 
     // Mapa que armazena o estado atual da conversa por telefone
@@ -122,6 +125,7 @@ public class BotService {
 
 
             // Recebe o tipo de serviço
+            // Recebe o tipo de serviço
             case AGUARDANDO_SERVICO -> {
                 Agendamento agendamento = dadosParciais.get(telefone);
                 String servico = mensagem.trim();
@@ -131,48 +135,57 @@ public class BotService {
                         estados.put(telefone, EstadoFluxo.AGUARDANDO_DATA);
                         List<LocalDate> diasDisponiveis = obterDiasDisponiveis(7);
                         diasDisponiveisMap.put(telefone, diasDisponiveis);
-                        StringBuilder sb = new StringBuilder("Digite o número do dia que melhor te atende:\n\n");
+                        StringBuilder sb = new StringBuilder("""
+                    📅 Perfeito! Agora escolha o dia que melhor te atende para realizarmos a revisão:
+
+                    """);
                         for (int i = 0; i < diasDisponiveis.size(); i++) {
                             sb.append(i + 1).append(" - ")
                                     .append(diasDisponiveis.get(i).format(DateTimeFormatter.ofPattern("dd/MM"))).append("\n");
                         }
                         return sb.toString();
                     }
+
                     case "2" -> {
                         agendamento.setTipoServico("Troca de peças");
                         estados.put(telefone, EstadoFluxo.AGUARDANDO_OBSERVACAO);
-                        return "Por favor, descreva quais peças você deseja trocar.";
+                        return """
+                    🔧 Certo! Para continuarmos, nos diga quais peças você deseja trocar.
+
+                    Quanto mais detalhes, melhor será o nosso atendimento. 😊
+                    """;
                     }
+
                     case "3" -> {
                         agendamento.setTipoServico("Compra");
-
                         agendamento.setTelefone(telefone);
-
-                        enviarParaSetorDeVendas(agendamento);
-
-                        enviarArquivoPdfParaCliente(
-                                telefone,
-                                catalogo.getCaminhoPdf(),
-                                """
-                                        🛒 Confira nosso catálogo completo de produtos!
-                                        """
-                        );
-
+                        estados.put(telefone, EstadoFluxo.AGUARDANDO_OBSERVACAO);
                         return """
-                                Enviamos o catálogo completo para você! 📄
-                                
-                                📞 Fale com o setor de vendas, Clicando no número abaixo: %s
-                                """.formatted(tel.getTelefoneVendas());
-                    }
+                    🛍️ Legal! Informe abaixo o(s) produto(s) que você tem interesse em comprar.
 
+                    Assim poderemos direcionar seu atendimento de forma mais eficiente!
+                    """;
+                    }
 
                     case "4" -> {
                         agendamento.setTipoServico("Outros serviços");
                         estados.put(telefone, EstadoFluxo.AGUARDANDO_OBSERVACAO);
-                        return "Por favor, descreva qual serviço você deseja realizar.";
+                        return """
+                    ✍️ Por favor, descreva com detalhes o serviço que deseja realizar.
+
+                    Após recebermos sua solicitação, nossa equipe verificará a disponibilidade e daremos sequência ao agendamento. 😊
+                    """;
                     }
+
                     default -> {
-                        return "❌ Opção inválida. Escolha:\n1 - Revisão\n2 - Troca de peças\n3 - Compra\n4 - Outros serviços";
+                        return """
+                    ❌ Opção inválida! Por favor, escolha uma das opções abaixo:
+
+                    1️⃣ - Revisão
+                    2️⃣ - Troca de peças
+                    3️⃣ - Compra
+                    4️⃣ - Outros serviços
+                    """;
                     }
                 }
             }
@@ -182,13 +195,45 @@ public class BotService {
             case AGUARDANDO_OBSERVACAO -> {
                 Agendamento agendamento = dadosParciais.get(telefone);
                 agendamento.setObservacao(mensagem);
+
+                if ("Compra".equalsIgnoreCase(agendamento.getTipoServico())) {
+                    // Envia para o setor de vendas com a observação do que o cliente quer comprar
+                    enviarParaSetorDeVendas(agendamento);
+
+                    // Envia o PDF do catálogo
+                    zApiClient.enviarArquivoPdf(
+                            telefone,
+                            catalogo.getCaminhoPdf(),
+                            "🛒 Confira nosso catálogo completo de produtos!"
+                    );
+
+                    // Finaliza o atendimento
+                    estados.remove(telefone);
+                    dadosParciais.remove(telefone);
+
+                    return """
+                            📄 Enviamos o nosso catálogo completo para você com as melhores opções de produtos! 
+                            
+                            📝 *Resumo do seu pedido:* 
+                            "%s"
+                            
+                            🛍️ Sua solicitação foi encaminhada ao nosso setor de vendas, que entrará em contato para te ajudar com todos os detalhes.
+                            
+                            💬 Caso prefira, você também pode falar diretamente com um de nossos atendentes clicando no número abaixo:
+                            %s
+                            
+                            Agradecemos pelo interesse e estamos à disposição para te atender com excelência! 🤝🚲
+                            """.formatted(agendamento.getObservacao(), tel.getTelefoneVendas());
+
+                }
+
+                // Se não for compra, segue normalmente para agendamento de data
                 estados.put(telefone, EstadoFluxo.AGUARDANDO_DATA);
                 List<LocalDate> diasDisponiveis = obterDiasDisponiveis(7);
                 diasDisponiveisMap.put(telefone, diasDisponiveis);
                 StringBuilder sb = new StringBuilder("Digite o número do dia que melhor te atende:\n\n");
                 for (int i = 0; i < diasDisponiveis.size(); i++) {
-                    sb.append(i + 1).append(" - ")
-                            .append(diasDisponiveis.get(i).format(DateTimeFormatter.ofPattern("dd/MM"))).append("\n");
+                    sb.append(i + 1).append(" - ").append(diasDisponiveis.get(i).format(DateTimeFormatter.ofPattern("dd/MM"))).append("\n");
                 }
                 return sb.toString();
             }
@@ -227,6 +272,18 @@ public class BotService {
                     LocalTime inicio;
                     LocalTime fim;
 
+
+                    // ⚠️ Aqui está a verificação do limite diário
+                    if (excedeuLimitePorDia(dataEscolhida, agendamento.getLoja())) {
+                        estados.put(telefone, EstadoFluxo.AGUARDANDO_DATA);
+                        return """
+                                ❌ *Agenda lotada!*
+                                
+                                Infelizmente, todos os horários para o dia *%s* já foram preenchidos. 😥
+                                Por favor, escolha outro dia disponível para o seu agendamento. 📅
+                                """.formatted(dataEscolhida.format(DateTimeFormatter.ofPattern("dd/MM")));
+
+                    }
                     if (diaSemana == DayOfWeek.SATURDAY) {
                         inicio = LocalTime.of(8, 0);
                         fim = LocalTime.of(15, 0);
@@ -284,10 +341,8 @@ public class BotService {
                             "📍 Loja: *" + agendamento.getLoja() + "*\n" +
                             "📅 Data: *" + agendamento.getData() + "* às *" + agendamento.getHorario() + "*\n" +
                             "🔧 Serviço: *" + agendamento.getTipoServico() + "*\n\n" +
-                            gerarMensagemPromocional()+
+                            gerarMensagemPromocional() +
                             "Nos vemos em breve! Obrigado por confiar na Bike Rogers! 🚴‍♂️✨";
-
-
 
 
                 } else if (resposta.equals("❌") || resposta.equalsIgnoreCase("cancelar")) {
@@ -351,12 +406,20 @@ public class BotService {
      * @param data data a ser verificada
      * @return true se o limite foi excedido, false caso contrário
      */
-    private boolean excedeuLimitePorDia(LocalDate data) {
+    private boolean excedeuLimitePorDia(LocalDate data, String loja) {
         List<Agendamento> ags = JsonStorage.listarAgendamentos();
         long total = ags.stream()
-                .filter(a -> a.getData().equals(data.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))))
+                .filter(a -> a.getData().equals(data.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")))
+                        && a.getLoja().equalsIgnoreCase(loja))
                 .count();
-        return total >= 5;
+
+        int limite = switch (loja) {
+            case "Loja Forte Ville" -> lojaProps.getQuantidadeServicosDiarioLojaForteVille();
+            case "Loja Novo Horizonte" -> lojaProps.getQuantidadeServicosDiarioLojaNovoHorizonte();
+            default -> 5;
+        };
+
+        return total >= limite;
     }
 
 
@@ -367,59 +430,26 @@ public class BotService {
      * @param agendamento objeto Agendamento com os dados do cliente
      */
     private void enviarParaSetorDeVendas(Agendamento agendamento) {
-        // Aqui você pode usar a Z-API futuramente para enviar os dados automaticamente
-
         String mensagem = String.format("""
-                📦 Novo cliente interessado em compra!
-                
-                👤 Nome: %s
-                📱 Telefone: %s
-                Loja: %s
-                Serviço: %s
-                
-                ⚠️ Favor entrar em contato para finalizar a compra.
-                """, agendamento.getNome(), agendamento.getTelefone(), agendamento.getLoja(), agendamento.getTipoServico());
+                        🛍️ *Novo pedido de compra recebido!*
+                        
+                        👤 Nome do cliente: %s
+                        📱 Telefone: %s
+                        📝 Produto(s) de interesse: %s
+                        🏪 Loja: %s
+                        🧾 Tipo de atendimento: %s
+                        
+                        🚨 Por favor, entre em contato com o cliente para dar continuidade ao atendimento.
+                        """,
+                agendamento.getNome(),
+                agendamento.getTelefone(),
+                agendamento.getObservacao() != null ? agendamento.getObservacao() : "Não informado",
+                agendamento.getLoja(),
+                agendamento.getTipoServico()
+        );
 
-        // Exemplo: usar Z-API futuramente para envio automático:
-        // zApiClient.enviarMensagem(numeroVendas, mensagem);
 
-        System.out.println("📤 Mensagem enviada ao setor de vendas:\n" + mensagem); // log no console
-    }
-
-
-    /**
-     * Envia um arquivo PDF para o cliente via Z-API.
-     *
-     * @param telefone   número do telefone do cliente
-     * @param caminhoPdf caminho do arquivo PDF a ser enviado
-     * @param legenda    legenda que acompanha o arquivo
-     */
-    public void enviarArquivoPdfParaCliente(String telefone, String caminhoPdf, String legenda) {
-        String url = "https://zapi.z-api.io/instances/" + zApi.getInstanceId() + "/token/" + zApi.getToken() + "/send-file";
-
-        try {
-            byte[] fileContent = Files.readAllBytes(Paths.get(caminhoPdf));
-            String base64 = Base64.getEncoder().encodeToString(fileContent);
-
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString("""
-                            {
-                                "phone": "%s",
-                                "filename": "catalogo.pdf",
-                                "base64": "%s",
-                                "caption": "%s"
-                            }
-                            """.formatted(telefone, base64, legenda)))
-                    .build();
-
-            client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        zApiClient.enviarMensagemTexto(tel.getTelefoneVendas(), mensagem);
     }
 
 
@@ -431,13 +461,17 @@ public class BotService {
      */
     private void notificarMecanico(Agendamento agendamento) {
         String mensagem = String.format("""
-                        📅 Novo Agendamento
-                        👤 Nome: %s
-                        🔧 Serviço: %s
-                        📆 Data: %s às %s
-                        📋 Observação: %s
-                        🏪 Loja: %s
-                        📱 Telefone: %s
+                        🔔 *Novo agendamento recebido!*
+                        
+                        👤 *Cliente:* %s
+                        🛠️ *Serviço solicitado:* %s
+                        📅 *Data:* %s
+                        ⏰ *Horário:* %s
+                        📝 *Observações:* %s
+                        🏪 *Loja:* %s
+                        📞 *Contato:* %s
+                        
+                        Por favor, prepare-se para o atendimento. Qualquer dúvida, entre em contato com o cliente. 🚲✅
                         """,
                 agendamento.getNome(),
                 agendamento.getTipoServico(),
@@ -448,17 +482,15 @@ public class BotService {
                 agendamento.getTelefone()
         );
 
-        System.out.println("📤 Mensagem enviada ao mecânico:\n" + mensagem);
 
-        // Futuro: enviar via Z-API
+        zApiClient.enviarMensagemTexto(tel.getTelefoneMecanico(), mensagem);
     }
-
 
 
     /**
      * Gera uma mensagem promocional aleatória para o cliente.
      * Pode ser usada em qualquer ponto do fluxo, como após a confirmação do agendamento.
-     *
+     * <p>
      * - @return mensagem promocional
      */
     private String gerarMensagemPromocional() {
@@ -491,7 +523,6 @@ public class BotService {
         Collections.shuffle(frases);
         return frases.get(0);
     }
-
 
 
 }
