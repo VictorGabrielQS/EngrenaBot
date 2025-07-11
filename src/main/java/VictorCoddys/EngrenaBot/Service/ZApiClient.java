@@ -25,29 +25,39 @@ public class ZApiClient {
     private final RestTemplate restTemplate = new RestTemplate();
 
 
+    /**
+     * Envia uma mensagem de texto para o cliente via Z-API.
+     *
+     * @param telefone número do telefone do cliente
+     * @param mensagem mensagem a ser enviada
+     */
     public void enviarMensagemTexto(String telefone, String mensagem) {
         String url = "https://api.z-api.io/instances/" + zApi.getInstanceId()
                 + "/token/" + zApi.getToken() + "/send-text";
 
         try {
             String payload = """
-                    {
-                        "phone": "%s",
-                        "message": "%s"
-                    }
-                    """.formatted(telefone, mensagem);
+            {
+                "phone": "%s",
+                "message": "%s"
+            }
+        """.formatted(telefone, mensagem.replace("\"", "\\\""));
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
+                    .header("Client-Token", zApi.getToken()) // ✅ Obrigatório
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
                     .build();
 
             HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
         } catch (Exception e) {
+            System.err.println("Erro ao enviar mensagem de texto: " + e.getMessage());
             e.printStackTrace();
         }
     }
+
 
 
 
@@ -58,7 +68,6 @@ public class ZApiClient {
      * @param caminhoPdf caminho do arquivo PDF a ser enviado
      * @param legenda    legenda que acompanha o arquivo
      */
-
     public void enviarArquivoPdf(String telefone, String caminhoPdf, String legenda) {
         String url = "https://api.z-api.io/instances/" + zApi.getInstanceId()
                 + "/token/" + zApi.getToken() + "/send-file";
