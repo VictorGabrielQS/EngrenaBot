@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/mensagem")
@@ -27,9 +28,16 @@ public class BotController {
     // Receber mensagem do WhatsApp
     // 📩 Isso processa mensagens recebidas do WhatsApp e executa ações baseadas nelas.
     @PostMapping
-    public String receberMensagem(@RequestParam String telefone, @RequestParam String texto) {
+    public String receberMensagem(@RequestBody Map<String, Object> payload) {
+        Map<String, Object> message = (Map<String, Object>) payload.get("message");
+        if (message == null) return "❌ Payload inválido";
+
+        String telefone = (String) message.get("from");
+        String texto = (String) message.get("text");
+
         return botService.processarMensagem(telefone, texto);
     }
+
 
 
 
