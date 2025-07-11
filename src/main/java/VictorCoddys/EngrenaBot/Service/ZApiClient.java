@@ -26,8 +26,8 @@ public class ZApiClient {
 
 
     public void enviarMensagemTexto(String telefone, String mensagem) {
-        String url = "https://zapi.z-api.io/instances/" + zApi.getInstanceId()
-                + "/token/" + zApi.getToken() + "/send-message";
+        String url = "https://api.z-api.io/instances/" + zApi.getInstanceId()
+                + "/token/" + zApi.getToken() + "/send-text";
 
         try {
             String payload = """
@@ -60,7 +60,7 @@ public class ZApiClient {
      */
 
     public void enviarArquivoPdf(String telefone, String caminhoPdf, String legenda) {
-        String url = "https://zapi.z-api.io/instances/" + zApi.getInstanceId()
+        String url = "https://api.z-api.io/instances/" + zApi.getInstanceId()
                 + "/token/" + zApi.getToken() + "/send-file";
 
         try {
