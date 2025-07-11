@@ -10,12 +10,7 @@ import VictorCoddys.EngrenaBot.Util.JsonStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -573,5 +568,9 @@ public class BotService {
         return frases.get(0);
     }
 
+
+    public void enviarTexto(String telefone, String texto) {
+        zApiClient.enviarMensagemTexto(telefone, texto);
+    }
 
 }
