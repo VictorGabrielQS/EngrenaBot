@@ -29,18 +29,25 @@ public class BotController {
     // 📩 Isso processa mensagens recebidas do WhatsApp e executa ações baseadas nelas.
     @PostMapping
     public String receberMensagem(@RequestBody Map<String, Object> payload) {
-        System.out.println("📩 Payload recebido: " + payload); // debug
+        System.out.println("📩 Payload recebido: " + payload); // Debug geral
 
-        Map<String, Object> message = (Map<String, Object>) payload.get("message");
-        if (message == null) return "❌ Payload inválido";
+        if (!"ReceivedCallback".equals(payload.get("type"))) {
+            return "🔕 Ignorado (não é mensagem de usuário)";
+        }
 
-        String telefone = (String) message.get("from");
-        String texto = (String) message.get("text");
+        String telefone = (String) payload.get("phone");
 
-        System.out.println("📲 De: " + telefone + " | Mensagem: " + texto);
+        Map<String, String> text = (Map<String, String>) payload.get("text");
+        if (text == null || text.get("message") == null) {
+            return "❌ Texto não encontrado no payload";
+        }
 
-        return botService.processarMensagem(telefone, texto);
+        String mensagem = text.get("message");
+
+        System.out.printf("📲 Mensagem de %s: %s%n", telefone, mensagem);
+        return botService.processarMensagem(telefone, mensagem);
     }
+
 
 
     // Limpa todos os agendamentos
