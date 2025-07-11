@@ -21,6 +21,8 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+//
+
 /**
  * Serviço que gerencia o fluxo de mensagens do bot.
  * Armazena o estado atual de cada usuário e os dados parciais do agendamento.
