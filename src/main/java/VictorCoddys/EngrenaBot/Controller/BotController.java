@@ -28,24 +28,19 @@ public class BotController {
     // Receber mensagem do WhatsApp
     // 📩 Isso processa mensagens recebidas do WhatsApp e executa ações baseadas nelas.
     @PostMapping
-    public String receberMensagem(@RequestBody Map<String, Object> payload) {
-        System.out.println("📩 Payload recebido: " + payload); // Debug geral
-
-        if (!"ReceivedCallback".equals(payload.get("type"))) {
-            return "🔕 Ignorado (não é mensagem de usuário)";
-        }
+    public void receberMensagem(@RequestBody Map<String, Object> payload) {
+        // Verifica se é o tipo de mensagem esperada (evita status, presença, etc.)
+        if (!"ReceivedCallback".equals(payload.get("type"))) return;
 
         String telefone = (String) payload.get("phone");
 
+        // Extrai o texto da mensagem enviada pelo usuário
         Map<String, String> text = (Map<String, String>) payload.get("text");
-        if (text == null || text.get("message") == null) {
-            return "❌ Texto não encontrado no payload";
-        }
+        if (text == null || text.get("message") == null) return;
 
         String mensagem = text.get("message");
 
-        System.out.printf("📲 Mensagem de %s: %s%n", telefone, mensagem);
-        return botService.processarMensagem(telefone, mensagem);
+        botService.processarMensagem(telefone, mensagem); // Já responde via Z-API
     }
 
 
